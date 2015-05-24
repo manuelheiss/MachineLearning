@@ -1,0 +1,92 @@
+---
+title: "Practical Machine Learning - Programming Assignment"
+output: html_document
+---
+
+Load relevant libraries.
+```{r results = 'hide', message = FALSE, warning = FALSE}
+library(caret)
+library(randomForest)
+```
+
+Set the seed parameter to achive reproducability.
+```{r}
+set.seed(1)
+```
+
+Load the training and the testing data from the downloaded (from http://groupware.les.inf.puc-rio.br/har) CSV input files.
+```{r}
+pmltraining <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+pmltesting <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+```
+
+Have a first look at the data.
+```{r}
+dim(pmltraining)
+dim(pmltesting)
+```
+Ok, seems like there are a lot of columns. Some of them can probably be excluded.
+Have a look at the columns and theire respective population.
+```{r}
+str(pmltraining)
+```
+Get rid of first column in both data sets, since it just contains the row number.
+```{r}
+pmltraining <- pmltraining[, -1]
+pmltesting <- pmltesting[, -1]
+```
+Since the testing data set is just for the final submision, split the training data in a real training (70%) and testing (30%) set for developing the algo.
+```{r}
+index <- createDataPartition(pmltraining$classe, p = 0.7, list = FALSE)
+training <- pmltraining[index,]
+testing <- pmltraining[-index,]
+```
+Check the dimensions.
+```{r}
+dim(training)
+dim(testing)
+```
+Next reduce the number of columns in all data sets by excluding those columns which just have "NA" values in the final testing data set.
+```{r}
+colindex <- c((colSums(!is.na(pmltesting[,-ncol(pmltesting)])) == 20))
+training <- training[, colindex]
+testing <- testing[, colindex]
+final_testing <- pmltesting[, colindex]
+```
+Check the remaining columns.
+```{r}
+str(training)
+```
+Get rid of the factor variables "user_name", "cvt_timestamp" and "new_window", since they add no value and would cause trouble later on.
+```{r}
+training <- training[, c(-1, -4,-5)]
+testing <- testing[, c(-1, -4,-5)]
+final_testing <- final_testing[, c(-1, -4,-5)]
+```
+Now the data is clean enough to build a model with random forest approach.
+```{r}
+model <- randomForest(classe~., data = training)
+print(model)
+```
+Next step cross validate the model using the testing data set.
+```{r}
+confusionMatrix(predict(model, newdata = testing[, -ncol(testing)]), testing$classe)
+```
+Out of sample error is not too bad. Accuracy is $99.9%$, this is quite good.
+
+Evaluate model with final testing data set. Note that the last column has to be avoided since it holds the problem ID.
+```{r}
+predictions <- predict(model, newdata = final_testing[-56])
+```
+Prepare final evaluation for upload.
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(predictions)
+```
+Upload yields full points, so model is ok.
